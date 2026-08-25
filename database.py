@@ -166,11 +166,16 @@ def update_incident(
     resolution
 ):
     """
-    Update incident status, root cause and resolution.
+    Update incident details and store resolution time.
     """
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    resolved_at = None
+
+    if status == "Resolved":
+        resolved_at = datetime.now().isoformat()
 
     cursor.execute("""
         UPDATE incidents
