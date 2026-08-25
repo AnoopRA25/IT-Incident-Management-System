@@ -520,10 +520,12 @@ if page == "📊 Dashboard":
         '<p class="subtitle">Real-time monitoring and incident operations dashboard</p>',
         unsafe_allow_html=True
     )
+incidents = get_all_incidents()
 
-    active_count = 0
+active_count = 0
 
 if incidents:
+
     temp_df = pd.DataFrame(incidents)
 
     active_count = len(
@@ -1131,140 +1133,210 @@ elif page == "📋 Incident Explorer":
 
     st.title("📋 Incident Explorer")
 
-    incidents = get_all_incidents()
+incidents = get_all_incidents()
 
-    if not incidents:
+if not incidents:
 
-        st.info(
-            "No incidents available."
+    st.info(
+        "No incidents available."
+    )
+
+else:
+
+    df = pd.DataFrame(incidents)
+
+    df = add_sla_status(df)
+
+    # ==========================================
+    # SEARCH AND FILTERS
+    # ==========================================
+
+    st.subheader("🔎 Search & Filter Incidents")
+
+    search = st.text_input(
+        "Search by Incident ID, Title or Description",
+        placeholder="Example: database, login failure, INC0001..."
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    # ------------------------------------------
+    # STATUS FILTER
+    # ------------------------------------------
+
+    with col1:
+
+        status_filter = st.selectbox(
+            "Status",
+            [
+                "All",
+                "Open",
+                "In Progress",
+                "Resolved"
+            ]
         )
 
-    else:
+    # ------------------------------------------
+    # PRIORITY FILTER
+    # ------------------------------------------
 
-        df = pd.DataFrame(incidents)
+    with col2:
 
-        df = add_sla_status(df)
-
-        st.subheader("🔍 Search and Filters")
-
-        search = st.text_input(
-            "Search by Incident ID or Title"
+        priority_filter = st.selectbox(
+            "Priority",
+            [
+                "All",
+                "Critical",
+                "High",
+                "Medium",
+                "Low"
+            ]
         )
 
-        col1, col2, col3 = st.columns(3)
+    # ------------------------------------------
+    # CATEGORY FILTER
+    # ------------------------------------------
 
-        with col1:
+    with col3:
 
-            status_filter = st.selectbox(
-                "Status",
-                [
-                    "All",
-                    "Open",
-                    "In Progress",
-                    "Resolved"
-                ]
-            )
-
-        with col2:
-
-            priority_filter = st.selectbox(
-                "Priority",
-                [
-                    "All",
-                    "Critical",
-                    "High",
-                    "Medium",
-                    "Low"
-                ]
-            )
-
-        with col3:
-
-            categories = [
-                "All"
-            ] + sorted(
-                df["category"].dropna().unique().tolist()
-            )
-
-            category_filter = st.selectbox(
-                "Category",
-                categories
-            )
-
-        filtered_df = df.copy()
-
-        # Search
-        if search:
-
-            search_lower = search.lower()
-
-            filtered_df = filtered_df[
-                filtered_df["incident_id"]
-                .str.lower()
-                .str.contains(
-                    search_lower,
-                    na=False
-                )
-                |
-                filtered_df["title"]
-                .str.lower()
-                .str.contains(
-                    search_lower,
-                    na=False
-                )
-            ]
-
-        # Status filter
-        if status_filter != "All":
-
-            filtered_df = filtered_df[
-                filtered_df["status"]
-                == status_filter
-            ]
-
-        # Priority filter
-        if priority_filter != "All":
-
-            filtered_df = filtered_df[
-                filtered_df["priority"]
-                == priority_filter
-            ]
-
-        # Category filter
-        if category_filter != "All":
-
-            filtered_df = filtered_df[
-                filtered_df["category"]
-                == category_filter
-            ]
-
-        st.caption(
-            f"{len(filtered_df)} incident(s) found"
+        categories = [
+            "All"
+        ] + sorted(
+            df["category"]
+            .dropna()
+            .unique()
+            .tolist()
         )
 
-        display_columns = [
-            "incident_id",
-            "title",
-            "category",
-            "priority",
-            "status",
-            "assigned_team",
-            "sla_status"
+        category_filter = st.selectbox(
+            "Category",
+            categories
+        )
+
+    # ------------------------------------------
+    # ASSIGNED TEAM FILTER
+    # ------------------------------------------
+
+    with col4:
+
+        teams = [
+            "All"
+        ] + sorted(
+            df["assigned_team"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        team_filter = st.selectbox(
+            "Assigned Team",
+            teams
+        )
+
+    # ==========================================
+    # APPLY FILTERS
+    # ==========================================
+
+    filtered_df = df.copy()
+
+    # Search by ID, title or description
+    if search:
+
+        search_lower = search.lower()
+
+        filtered_df = filtered_df[
+            filtered_df["incident_id"]
+            .astype(str)
+            .str.lower()
+            .str.contains(
+                search_lower,
+                na=False
+            )
+            |
+            filtered_df["title"]
+            .astype(str)
+            .str.lower()
+            .str.contains(
+                search_lower,
+                na=False
+            )
+            |
+            filtered_df["description"]
+            .astype(str)
+            .str.lower()
+            .str.contains(
+                search_lower,
+                na=False
+            )
         ]
 
-        st.dataframe(
-            filtered_df[display_columns],
-            use_container_width=True,
-            hide_index=True
-        )
+    # Status filter
+    if status_filter != "All":
 
-        st.divider()
+        filtered_df = filtered_df[
+            filtered_df["status"]
+            == status_filter
+        ]
+
+    # Priority filter
+    if priority_filter != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["priority"]
+            == priority_filter
+        ]
+
+    # Category filter
+    if category_filter != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["category"]
+            == category_filter
+        ]
+
+    # Assigned Team filter
+    if team_filter != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["assigned_team"]
+            == team_filter
+        ]
+
+    # ==========================================
+    # RESULT COUNT
+    # ==========================================
+
+    st.caption(
+        f"Showing {len(filtered_df)} of {len(df)} incident(s)"
+    )
+
+    # ==========================================
+    # DISPLAY INCIDENTS
+    # ==========================================
+
+    display_columns = [
+        "incident_id",
+        "title",
+        "category",
+        "priority",
+        "status",
+        "assigned_team",
+        "sla_status"
+    ]
+
+    st.dataframe(
+        filtered_df[display_columns],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
 
         # ------------------------------
         # INCIDENT DETAILS
         # ------------------------------
 
-        if not filtered_df.empty:
+    if not filtered_df.empty:
 
             st.subheader("🔎 Incident Details")
 
@@ -1344,7 +1416,7 @@ elif page == "📋 Incident Explorer":
 # UPDATE INCIDENT
 # =================================================
 
-elif page == "🔧 Update Incident":
+if page == "🔧 Update Incident":
 
     st.title("🔧 Update / Resolve Incident")
 
